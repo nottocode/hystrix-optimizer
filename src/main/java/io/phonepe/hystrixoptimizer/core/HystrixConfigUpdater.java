@@ -45,7 +45,7 @@ public class HystrixConfigUpdater implements Runnable {
     private OptimizerMetricsCache optimizerMetricsCache;
 
     private static final int DEFAULT_CONCURRENCY = 3;
-    private static final String GLOBAL_THREAD_POOL_PREFIX = "global_";
+    public static final String GLOBAL_THREAD_POOL_PREFIX = "global_";
 
     @Override
     public void run() {

@@ -23,7 +23,6 @@ public class OptimizerTimeConfig {
 
     private LatencyMetric timeoutMetric;
 
-    private double getMethodTimeoutBuffer;
     private double allMethodTimeoutBuffer;
 
     private LatencyMetric appLatencyMetric;

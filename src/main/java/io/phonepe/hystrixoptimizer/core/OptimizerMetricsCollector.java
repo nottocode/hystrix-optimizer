@@ -53,7 +53,6 @@ public class OptimizerMetricsCollector implements Runnable {
      * example gauge key names :
      *
      * HystrixThreadPool.global_{threadpoolName}.rollingMaxActiveThreads,
-     * HystrixThreadPool.{threadpoolGroupName}.rollingMaxActiveThreads,
      * HystrixThreadPool.{serviceName}.{commandName}.rollingMaxActiveThreads
      */
     private void captureThreadPoolMetrics(SortedMap<String, Gauge> gauges, Long time) {
@@ -68,7 +67,6 @@ public class OptimizerMetricsCollector implements Runnable {
      *
      * example gauge key names :
      *
-     * revolver : {serviceName}.{serviceName}.{commandName}.latencyExecute_percentile_(995|90|75|50)
      * hystrix : {serviceName}.{commandName}.{serviceName}.{commandName}.latencyExecute_percentile_(995|90|75|50)
      */
     private void captureLatencyMetrics(SortedMap<String, Gauge> gauges, Long time) {

@@ -28,7 +28,7 @@ public abstract class HystrixOptimizerBundle<T extends Configuration> implements
 
     @Override
     public void initialize(Bootstrap<?> bootstrap) {
-
+        HystrixPlugins.reset();
     }
 
     @Override
@@ -38,9 +38,9 @@ public abstract class HystrixOptimizerBundle<T extends Configuration> implements
                 environment.metrics());
         val metrics = environment.metrics();
         ScheduledExecutorService metricsBuilderExecutorService = environment.lifecycle()
-                .scheduledExecutorService("metrics-builder").build();
+                .scheduledExecutorService("optimizer-metrics-builder").build();
         ScheduledExecutorService configUpdaterExecutorService = environment.lifecycle()
-                .scheduledExecutorService("config-updater").build();
+                .scheduledExecutorService("hystrix-config-updater").build();
 
         HystrixPlugins.getInstance().registerMetricsPublisher(metricsPublisher);
 

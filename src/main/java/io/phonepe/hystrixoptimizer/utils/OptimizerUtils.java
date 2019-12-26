@@ -23,7 +23,7 @@ public class OptimizerUtils {
 
     public static OptimizerConfig getDefaultOptimizerConfig() {
         return OptimizerConfig.builder()
-                .initialDelay(2)
+                .initialDelay(1)
                 .timeUnit(TimeUnit.MINUTES)
                 .concurrencyConfig(
                         OptimizerConcurrencyConfig.builder()
@@ -46,7 +46,6 @@ public class OptimizerUtils {
                 .timeConfig(
                         OptimizerTimeConfig.builder()
                                 .allMethodTimeoutBuffer(1.5)
-                                .getMethodTimeoutBuffer(1.3)
                                 .latencyMetrics(EnumSet.allOf(LatencyMetric.class))
                                 .timeoutMetric(LATENCY_PERCENTILE_99)
                                 .apiLatencyMetric(LATENCY_PERCENTILE_75)
