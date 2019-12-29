@@ -147,13 +147,13 @@ public class HystrixConfigUpdater implements Runnable {
                     .sum(0L)
                     .count(0L)
                     .build());
-        } else {
-            // aggregate metric value into sum and update count of metric
-            OptimizerAggregatedMetric optimizerAggregatedMetrics = aggregatedAppLatencyMetrics.get(metric);
-            optimizerAggregatedMetrics.setSum(optimizerAggregatedMetrics.getSum()
-                    + value.longValue());
-            optimizerAggregatedMetrics.setCount(optimizerAggregatedMetrics.getCount() + 1L);
         }
+
+        // aggregate metric value into sum and update count of metric
+        OptimizerAggregatedMetric optimizerAggregatedMetrics = aggregatedAppLatencyMetrics.get(metric);
+        optimizerAggregatedMetrics.setSum(optimizerAggregatedMetrics.getSum()
+                + value.longValue());
+        optimizerAggregatedMetrics.setCount(optimizerAggregatedMetrics.getCount() + 1L);
 
         aggregatedAppLatencyMetrics.forEach((metricName, aggregatedAppMetrics) -> {
             log.info("Aggregated " + metricName + " for app: "
