@@ -27,7 +27,5 @@ public class OptimizerTimeConfig {
 
     private LatencyMetric appLatencyMetric;
     private LatencyMetric apiLatencyMetric;
-    private int appLatencyThresholdValue;
-
 
 }

@@ -89,13 +89,11 @@ public class HystrixConfigUpdater implements Runnable {
                 });
 
             });
-
-            Map<String, Number> appLevelLatencyMetrics = avgAppLevelLatencyMetrics(aggregatedAppLatencyMetrics);
+            log.debug("Aggregated API Level Latency Metrics: {}", aggregateApiLevelLatencyMetrics);
             Map<String, OptimizerMetrics> apiLevelLatencyMetrics = avgApiLevelLatencyMetrics(
                     aggregateApiLevelLatencyMetrics);
-
+            log.debug("API Level Latency Metrics: {}", apiLevelLatencyMetrics);
             updateHystrixConfig(apiLevelThreadPoolMetrics, apiLevelLatencyMetrics);
-            updateLatencyThreshold(appLevelLatencyMetrics);
         } catch (Exception e) {
             log.error("Hystrix config couldn't be updated : " + e);
         }
@@ -119,29 +117,6 @@ public class HystrixConfigUpdater implements Runnable {
             });
         });
         return aggregateApiLevelLatencyMetrics;
-    }
-
-    private Map<String, Number> avgAppLevelLatencyMetrics(
-            Map<String, OptimizerAggregatedMetric> overallAppLatencyMetrics) {
-        Map<String, Number> aggregatedAppLevelLatencyMetrics = Maps.newHashMap();
-        overallAppLatencyMetrics.forEach((metricName, aggregatedAppMetrics) -> {
-            aggregatedAppLevelLatencyMetrics
-                    .put(metricName, aggregatedAppMetrics.getSum() / aggregatedAppMetrics.getCount());
-        });
-        return aggregatedAppLevelLatencyMetrics;
-    }
-
-
-    private void updateLatencyThreshold(Map<String, Number> appLevelLatencyMetrics) {
-
-        OptimizerTimeConfig optimizerTimeConfig = optimizerConfig.getTimeConfig();
-        if (optimizerTimeConfig == null || !optimizerTimeConfig.isEnabled()
-                || !appLevelLatencyMetrics.containsKey(optimizerTimeConfig.getAppLatencyMetric().getMetricName())) {
-            return;
-        }
-        int latencyThresholdValue = appLevelLatencyMetrics
-                .get(optimizerTimeConfig.getAppLatencyMetric().getMetricName()).intValue();
-        optimizerTimeConfig.setAppLatencyThresholdValue(latencyThresholdValue);
     }
 
     private void aggregateAppLevelLatencyMetrics(
@@ -236,6 +211,27 @@ public class HystrixConfigUpdater implements Runnable {
 
         updateHystrixConfigForCommands(apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
 
+        List<HystrixCommandConfig> hystrixCommandConfigs = updateHystrixConfigForCommandsWithDefaultConfig(
+                apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
+
+        if (configUpdated.get()) {
+            hystrixConfig.setCommands(hystrixCommandConfigs);
+            HystrixConfigurationFactory.init(hystrixConfig);
+            log.debug("Updated Hystrix config with command cache : {}, pool cache: {}",
+                    HystrixConfigurationFactory.getCommandCache(), HystrixConfigurationFactory.getPoolCache());
+        }
+    }
+
+    /**
+     * Updates thread pool config of commands which are not explicitly specified in commands
+     *
+     * (to which default config is applied at first)
+     *
+     * This will be executed only once at the start, thereafter all commands configs will be added to the list
+     */
+    private List<HystrixCommandConfig> updateHystrixConfigForCommandsWithDefaultConfig(
+            Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
+            Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
         List<HystrixCommandConfig> hystrixCommandConfigs = hystrixConfig.getCommands();
 
         Set<String> existingCommandConfigKeys = hystrixConfig.getCommands().stream()
@@ -276,11 +272,7 @@ public class HystrixConfigUpdater implements Runnable {
                     hystrixCommandConfigs.add(hystrixCommandConfig);
                     configUpdated.set(true);
                 });
-
-        if (configUpdated.get()) {
-            hystrixConfig.setCommands(hystrixCommandConfigs);
-            HystrixConfigurationFactory.init(hystrixConfig);
-        }
+        return hystrixCommandConfigs;
     }
 
     private void updateHystrixConfigForCommands(Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
