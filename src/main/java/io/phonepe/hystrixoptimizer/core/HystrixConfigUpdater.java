@@ -2,6 +2,7 @@ package io.phonepe.hystrixoptimizer.core;
 
 import static io.phonepe.hystrixoptimizer.metrics.ThreadPoolMetric.ROLLING_MAX_ACTIVE_THREADS;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.hystrix.configurator.config.CommandThreadPoolConfig;
 import com.hystrix.configurator.config.HystrixCommandConfig;
@@ -34,17 +35,29 @@ import lombok.extern.slf4j.Slf4j;
  Created by nitish.goyal on 29/03/19
  ***/
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
 public class HystrixConfigUpdater implements Runnable {
 
     private HystrixConfig hystrixConfig;
+    private HystrixConfig initialHystrixConfig;
     private OptimizerConfig optimizerConfig;
     private OptimizerMetricsCache optimizerMetricsCache;
+    private Map<String, HystrixCommandConfig> initialHystrixCommandConfigMap;
 
-    private static final int DEFAULT_CONCURRENCY = 3;
+    public HystrixConfigUpdater(final HystrixConfig hystrixConfig, final HystrixConfig initialHystrixConfig,
+            final OptimizerConfig optimizerConfig, final OptimizerMetricsCache optimizerMetricsCache) {
+        this.hystrixConfig = hystrixConfig;
+        this.initialHystrixConfig = initialHystrixConfig;
+        this.optimizerConfig = optimizerConfig;
+        this.optimizerMetricsCache = optimizerMetricsCache;
+        this.initialHystrixCommandConfigMap = Maps.newHashMap();
+        this.initialHystrixConfig.getCommands()
+                .forEach(hystrixCommandConfig -> initialHystrixCommandConfigMap
+                        .putIfAbsent(hystrixCommandConfig.getName(), hystrixCommandConfig));
+    }
+
     public static final String GLOBAL_THREAD_POOL_PREFIX = "global_";
 
     @Override
@@ -219,23 +232,15 @@ public class HystrixConfigUpdater implements Runnable {
             Map<String, OptimizerMetrics> apiLevelLatencyMetrics) {
         AtomicBoolean configUpdated = new AtomicBoolean();
 
-        hystrixConfig.getPools().forEach((poolName, threadPoolConfig) -> {
-            OptimizerMetrics optimizerThreadPoolMetrics = apiLevelThreadPoolMetrics
-                    .get(GLOBAL_THREAD_POOL_PREFIX + poolName);
-            updateConcurrencySettingForPool(threadPoolConfig, optimizerThreadPoolMetrics,
-                    configUpdated, poolName);
-        });
+        updateHystrixConfigForThreadPoolGroups(apiLevelThreadPoolMetrics, configUpdated);
+
+        updateHystrixConfigForCommands(apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
+
+        List<HystrixCommandConfig> hystrixCommandConfigs = hystrixConfig.getCommands();
 
         Set<String> existingCommandConfigKeys = hystrixConfig.getCommands().stream()
                 .map(HystrixCommandConfig::getName)
                 .collect(Collectors.toSet());
-
-        hystrixConfig.getCommands().forEach(hystrixCommandConfig -> {
-            updateApiSettings(hystrixCommandConfig, apiLevelThreadPoolMetrics, apiLevelLatencyMetrics,
-                    configUpdated);
-        });
-
-        List<HystrixCommandConfig> hystrixCommandConfigs = hystrixConfig.getCommands();
 
         apiLevelLatencyMetrics.keySet().stream()
                 .filter(keyName -> !existingCommandConfigKeys.contains(keyName))
@@ -245,10 +250,9 @@ public class HystrixConfigUpdater implements Runnable {
                     if (optimizerLatencyMetrics == null || optimizerThreadPoolMetrics == null) {
                         return;
                     }
-
+                    int concurrency = hystrixConfig.getDefaultConfig().getThreadPool().getConcurrency();
                     OptimalThreadPoolAttributes optimalThreadPoolAttributes = calculateOptimalThreadPoolSize(
-                            hystrixConfig.getDefaultConfig().getThreadPool().getConcurrency(),
-                            commandName, optimizerThreadPoolMetrics);
+                            concurrency, concurrency, commandName, optimizerThreadPoolMetrics);
                     OptimalTimeoutAttributes optimalTimeoutAttributes = calculateOptimalTimeout(
                             hystrixConfig.getDefaultConfig().getThreadPool().getTimeout(),
                             optimizerLatencyMetrics);
@@ -279,7 +283,35 @@ public class HystrixConfigUpdater implements Runnable {
         }
     }
 
-    private void updateApiSettings(HystrixCommandConfig hystrixCommandConfig,
+    private void updateHystrixConfigForCommands(Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
+            Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
+        hystrixConfig.getCommands().forEach(hystrixCommandConfig -> {
+            HystrixCommandConfig initialHystrixCommandConfig = initialHystrixCommandConfigMap
+                    .get(hystrixCommandConfig.getName());
+            int initialConcurrency = initialHystrixCommandConfig != null
+                    ? initialHystrixCommandConfig.getThreadPool().getConcurrency()
+                    : initialHystrixConfig.getDefaultConfig().getThreadPool().getConcurrency();
+            updateApiSettings(hystrixCommandConfig, initialConcurrency, apiLevelThreadPoolMetrics,
+                    apiLevelLatencyMetrics,
+                    configUpdated);
+        });
+    }
+
+    private void updateHystrixConfigForThreadPoolGroups(Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
+            AtomicBoolean configUpdated) {
+        // Update hystrix config for thread pool groups
+        hystrixConfig.getPools().forEach((poolName, currentThreadPoolConfig) -> {
+            OptimizerMetrics optimizerThreadPoolMetrics = apiLevelThreadPoolMetrics
+                    .get(GLOBAL_THREAD_POOL_PREFIX + poolName);
+            ThreadPoolConfig initialThreadPoolConfig = initialHystrixConfig.getPools().get(poolName);
+            Preconditions.checkArgument(initialThreadPoolConfig != null,
+                    "Initial thread pool config for pool name : " + poolName + " is null");
+            updateConcurrencySettingForPool(currentThreadPoolConfig, initialThreadPoolConfig,
+                    optimizerThreadPoolMetrics, poolName, configUpdated);
+        });
+    }
+
+    private void updateApiSettings(HystrixCommandConfig hystrixCommandConfig, int initialConcurrency,
             Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
             Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
 
@@ -290,18 +322,18 @@ public class HystrixConfigUpdater implements Runnable {
         if (optimizerLatencyMetrics == null || optimizerThreadPoolMetrics == null) {
             return;
         }
-        updateConcurrencySettingForCommand(hystrixCommandConfig.getThreadPool(), optimizerThreadPoolMetrics,
-                configUpdated, commandName);
-        updateTimeoutSettingForCommand(hystrixCommandConfig.getThreadPool(), optimizerLatencyMetrics,
-                configUpdated, commandName);
+        updateConcurrencySettingForCommand(hystrixCommandConfig.getThreadPool(), initialConcurrency,
+                optimizerThreadPoolMetrics, commandName, configUpdated);
+        updateTimeoutSettingForCommand(hystrixCommandConfig.getThreadPool(), optimizerLatencyMetrics, commandName,
+                configUpdated);
     }
 
     private void updateConcurrencySettingForCommand(CommandThreadPoolConfig threadPoolConfig,
-            OptimizerMetrics optimizerThreadPoolMetrics, AtomicBoolean configUpdated,
-            String poolName) {
+            int initialConcurrency, OptimizerMetrics optimizerThreadPoolMetrics, String poolName,
+            AtomicBoolean configUpdated) {
 
         OptimalThreadPoolAttributes optimalThreadPoolAttributes = calculateOptimalThreadPoolSize(
-                threadPoolConfig.getConcurrency(), poolName,
+                threadPoolConfig.getConcurrency(), initialConcurrency, poolName,
                 optimizerThreadPoolMetrics);
         if (optimalThreadPoolAttributes.getOptimalConcurrency() != threadPoolConfig.getConcurrency()) {
             log.info("Setting concurrency for command : " + poolName + " from : " + threadPoolConfig.getConcurrency()
@@ -314,27 +346,27 @@ public class HystrixConfigUpdater implements Runnable {
 
     }
 
-    private void updateConcurrencySettingForPool(ThreadPoolConfig threadPoolConfig,
-            OptimizerMetrics optimizerThreadPoolMetrics, AtomicBoolean configUpdated,
-            String poolName) {
+    private void updateConcurrencySettingForPool(ThreadPoolConfig currentThreadPoolConfig,
+            ThreadPoolConfig initialThreadPoolConfig,
+            OptimizerMetrics optimizerThreadPoolMetrics, String poolName, AtomicBoolean configUpdated) {
 
         OptimalThreadPoolAttributes optimalThreadPoolAttributes = calculateOptimalThreadPoolSize(
-                threadPoolConfig.getConcurrency(), poolName,
+                currentThreadPoolConfig.getConcurrency(), initialThreadPoolConfig.getConcurrency(), poolName,
                 optimizerThreadPoolMetrics);
-        if (optimalThreadPoolAttributes.getOptimalConcurrency() != threadPoolConfig.getConcurrency()) {
-            log.info("Setting concurrency for pool : " + poolName + " from : " + threadPoolConfig.getConcurrency()
-                    + " to : "
-                    + optimalThreadPoolAttributes.getOptimalConcurrency() + ", maxRollingActiveThreads : "
-                    + optimalThreadPoolAttributes.getMaxRollingActiveThreads());
-            threadPoolConfig.setConcurrency(optimalThreadPoolAttributes.getOptimalConcurrency());
+        if (optimalThreadPoolAttributes.getOptimalConcurrency() != currentThreadPoolConfig.getConcurrency()) {
+            log.info(
+                    "Setting concurrency for pool : " + poolName + " from : " + currentThreadPoolConfig.getConcurrency()
+                            + " to : "
+                            + optimalThreadPoolAttributes.getOptimalConcurrency() + ", maxRollingActiveThreads : "
+                            + optimalThreadPoolAttributes.getMaxRollingActiveThreads());
+            currentThreadPoolConfig.setConcurrency(optimalThreadPoolAttributes.getOptimalConcurrency());
             configUpdated.set(true);
         }
 
     }
 
     private void updateTimeoutSettingForCommand(CommandThreadPoolConfig threadPoolConfig,
-            OptimizerMetrics optimizerLatencyMetrics, AtomicBoolean configUpdated,
-            String commandName) {
+            OptimizerMetrics optimizerLatencyMetrics, String commandName, AtomicBoolean configUpdated) {
 
         OptimalTimeoutAttributes optimalTimeoutAttributes = calculateOptimalTimeout(threadPoolConfig.getTimeout(),
                 optimizerLatencyMetrics);
@@ -349,10 +381,11 @@ public class HystrixConfigUpdater implements Runnable {
 
     }
 
-    private OptimalThreadPoolAttributes calculateOptimalThreadPoolSize(int initialConcurrency, String poolName,
+    private OptimalThreadPoolAttributes calculateOptimalThreadPoolSize(int currentConcurrency, int initialConcurrency,
+            String poolName,
             OptimizerMetrics optimizerThreadPoolMetrics) {
         OptimalThreadPoolAttributesBuilder initialConcurrencyAttrBuilder = OptimalThreadPoolAttributes.builder()
-                .optimalConcurrency(initialConcurrency);
+                .optimalConcurrency(currentConcurrency);
 
         OptimizerConcurrencyConfig concurrencyConfig = optimizerConfig.getConcurrencyConfig();
         if (concurrencyConfig == null || !concurrencyConfig.isEnabled()
@@ -366,15 +399,15 @@ public class HystrixConfigUpdater implements Runnable {
         log.info("Optimizer Concurrency Settings Enabled : {}, "
                         + "Max Threads Multiplier : {}, Max Threshold : {}, Initial Concurrency : {}, Pool Name: {}",
                 concurrencyConfig.isEnabled(), concurrencyConfig.getMaxThreadsMultiplier(),
-                concurrencyConfig.getMaxThreshold(), initialConcurrency, poolName);
+                concurrencyConfig.getMaxThreshold(), currentConcurrency, poolName);
 
         if (maxRollingActiveThreads == 0) {
             return OptimalThreadPoolAttributes.builder()
-                    .optimalConcurrency(DEFAULT_CONCURRENCY)
+                    .optimalConcurrency(optimizerConfig.getConcurrencyConfig().getDefaultConcurrency())
                     .maxRollingActiveThreads(maxRollingActiveThreads)
                     .build();
-        } else if ((maxRollingActiveThreads > initialConcurrency * concurrencyConfig.getMaxThreshold()
-                || maxRollingActiveThreads < initialConcurrency * concurrencyConfig.getMinThreshold())
+        } else if ((maxRollingActiveThreads > currentConcurrency * concurrencyConfig.getMaxThreshold()
+                || maxRollingActiveThreads < currentConcurrency * concurrencyConfig.getMinThreshold())
                 && maxRollingActiveThreads
                 < initialConcurrency * concurrencyConfig.getMaxThreadsMultiplier()) {
             int optimalConcurrency = (int) Math

@@ -24,4 +24,6 @@ public class OptimizerConcurrencyConfig {
 
     private double maxThreadsMultiplier = 1.4;
 
+    private int defaultConcurrency = 3;
+
 }
