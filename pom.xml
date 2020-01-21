@@ -73,6 +73,13 @@
         </dependency>
         <dependency>
             <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-jackson</artifactId>
+            <version>${dropwizard.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.dropwizard</groupId>
             <artifactId>dropwizard-assets</artifactId>
             <version>${dropwizard.version}</version>
             <scope>provided</scope>
