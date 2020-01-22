@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hystrix.configurator.config.CommandThreadPoolConfig;
 import com.hystrix.configurator.config.HystrixCommandConfig;
 import com.hystrix.configurator.config.HystrixConfig;
@@ -25,6 +26,7 @@ import io.phonepe.hystrixoptimizer.core.OptimizerMetricsCache;
 import io.phonepe.hystrixoptimizer.core.OptimizerMetricsCollector;
 import io.phonepe.hystrixoptimizer.metrics.LatencyMetric;
 import io.phonepe.hystrixoptimizer.utils.OptimizerUtils;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +42,7 @@ public class HystrixOptimizerBundleTest {
     private static final String ROLLING_MAX_ACTIVE_THREADS = "rollingMaxActiveThreads";
 
     @BeforeClass
-    public void beforeClass() {
+    public void beforeClass() throws IOException {
         HystrixConfig hystrixConfig = HystrixConfig.builder()
                 .defaultConfig(defaultHystrixConfig())
                 .pools(threadPoolConfigs())
@@ -52,6 +54,7 @@ public class HystrixOptimizerBundleTest {
 
         LifecycleEnvironment lifecycleEnvironment = new LifecycleEnvironment();
         Environment environment = mock(Environment.class);
+        when(environment.getObjectMapper()).thenReturn(new ObjectMapper());
         when(environment.metrics()).thenReturn(metrics);
         when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
         Bootstrap<?> bootstrap = mock(Bootstrap.class);
@@ -68,7 +71,7 @@ public class HystrixOptimizerBundleTest {
             }
 
             @Override
-            public void run(Configuration configuration, Environment environment) {
+            public void run(Configuration configuration, Environment environment) throws IOException {
                 super.run(configuration, environment);
             }
         };
@@ -86,24 +89,23 @@ public class HystrixOptimizerBundleTest {
                 .optimizerConfig(optimizerConfig)
                 .build();
 
-        hystrixConfigUpdater = HystrixConfigUpdater.builder()
-                .optimizerConfig(optimizerConfig)
-                .optimizerMetricsCache(optimizerMetricsCache)
-                .hystrixConfig(hystrixConfig)
-                .build();
+        hystrixConfigUpdater = new HystrixConfigUpdater(hystrixConfig,
+                environment.getObjectMapper().readValue(environment.getObjectMapper().writeValueAsString(hystrixConfig),
+                        HystrixConfig.class),
+                optimizerConfig, optimizerMetricsCache);
 
-        rollingMaxActiveGauge("myService.myCommand",10);
-        rollingMaxActiveGauge(GLOBAL_THREAD_POOL_PREFIX + "threadPool1",2);
-        rollingMaxActiveGauge(GLOBAL_THREAD_POOL_PREFIX + "threadPool2",2);
+        rollingMaxActiveGauge("myService.myCommand", 10);
+        rollingMaxActiveGauge(GLOBAL_THREAD_POOL_PREFIX + "threadPool1", 2);
+        rollingMaxActiveGauge(GLOBAL_THREAD_POOL_PREFIX + "threadPool2", 2);
 
-        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_995,  300);
-        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_99,  200);
-        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_75,  150);
-        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_50,  100);
+        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_995, 300);
+        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_99, 200);
+        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_75, 150);
+        latencyMetricGauge("myService.myCommand", LATENCY_PERCENTILE_50, 100);
     }
 
     private void latencyMetricGauge(String commandName, LatencyMetric latencyMetric, int value) {
-        metrics.gauge(commandName+"."+commandName+"." + latencyMetric.getMetricName(),
+        metrics.gauge(commandName + "." + commandName + "." + latencyMetric.getMetricName(),
                 new MetricRegistry.MetricSupplier<Gauge>() {
                     @Override
                     public Gauge newMetric() {
@@ -118,7 +120,7 @@ public class HystrixOptimizerBundleTest {
     }
 
     private void rollingMaxActiveGauge(String commandName, int value) {
-        metrics.gauge(THREAD_POOL_PREFIX + "."+commandName+"." + ROLLING_MAX_ACTIVE_THREADS,
+        metrics.gauge(THREAD_POOL_PREFIX + "." + commandName + "." + ROLLING_MAX_ACTIVE_THREADS,
                 new MetricRegistry.MetricSupplier<Gauge>() {
                     @Override
                     public Gauge newMetric() {

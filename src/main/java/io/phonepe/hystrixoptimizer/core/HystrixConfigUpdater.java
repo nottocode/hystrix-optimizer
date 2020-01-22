@@ -63,7 +63,7 @@ public class HystrixConfigUpdater implements Runnable {
     @Override
     public void run() {
         try {
-            log.info("Running revolver config updater job with exception catching enabled");
+            log.info("Running hystrix config updater job with exception catching enabled");
             Map<OptimizerCacheKey, OptimizerMetrics> metricsCache = optimizerMetricsCache.getCache();
             if (metricsCache.isEmpty()) {
                 log.info("Metrics cache is empty");
@@ -87,7 +87,7 @@ public class HystrixConfigUpdater implements Runnable {
                     aggregateApiLevelMetrics(apiLevelThreadPoolMetrics,
                             aggregateApiLevelLatencyMetrics, metric, value, key);
                 });
-
+p
             });
             log.debug("Aggregated API Level Latency Metrics: {}", aggregateApiLevelLatencyMetrics);
             Map<String, OptimizerMetrics> apiLevelLatencyMetrics = avgApiLevelLatencyMetrics(
