@@ -87,7 +87,7 @@ public class HystrixConfigUpdater implements Runnable {
                     aggregateApiLevelMetrics(apiLevelThreadPoolMetrics,
                             aggregateApiLevelLatencyMetrics, metric, value, key);
                 });
-p
+
             });
             log.debug("Aggregated API Level Latency Metrics: {}", aggregateApiLevelLatencyMetrics);
             Map<String, OptimizerMetrics> apiLevelLatencyMetrics = avgApiLevelLatencyMetrics(
