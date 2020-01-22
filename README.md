@@ -6,7 +6,7 @@
 
 * Add maven dependency
 ```xml
-        <dependency>
+                <dependency>
                     <groupId>io.phonepe</groupId>
                     <artifactId>hystrix-optimizer</artifactId>
                     <version>1.0.3</version>
@@ -43,7 +43,7 @@
 * Add Hystrix optimizer bundle to dropwizard app initialize method
 ```aidl
     @Override
-    public void initialize(Bootstrap<HermesConfiguration> bootstrap) {
+    public void initialize(Bootstrap<AppConfiguration> bootstrap) {
         ...
                // Add Hystrix optimizer bundle
                 bootstrap.addBundle(new HystrixOptimizerBundle<AppConfiguration>() {
