@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "actionType")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = UpdateHystrixConfig.class, name = "UPDATE_HYSTRIX_CONFIG"),
-        @JsonSubTypes.Type(value = EmailConfig.class, name = "SEND_EMAIL_ALERT")
+        @JsonSubTypes.Type(value = UpdateHystrixConfig.class, name = ActionType.UPDATE_HYSTRIX_CONFIG_VALUE),
+        @JsonSubTypes.Type(value = EmailConfig.class, name = ActionType.SEND_EMAIL_ALERT_VALUE)
 })
 public abstract class ActionConfig {
 
