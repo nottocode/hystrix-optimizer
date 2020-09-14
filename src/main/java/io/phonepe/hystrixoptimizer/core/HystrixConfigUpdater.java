@@ -2,16 +2,24 @@ package io.phonepe.hystrixoptimizer.core;
 
 import static io.phonepe.hystrixoptimizer.metrics.ThreadPoolMetric.ROLLING_MAX_ACTIVE_THREADS;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.hystrix.configurator.config.CommandThreadPoolConfig;
 import com.hystrix.configurator.config.HystrixCommandConfig;
 import com.hystrix.configurator.config.HystrixConfig;
 import com.hystrix.configurator.config.ThreadPoolConfig;
 import com.hystrix.configurator.core.HystrixConfigurationFactory;
+import io.phonepe.hystrixoptimizer.config.actions.Actions;
+import io.phonepe.hystrixoptimizer.config.actions.impl.EmailConfig;
 import io.phonepe.hystrixoptimizer.config.OptimizerConcurrencyConfig;
 import io.phonepe.hystrixoptimizer.config.OptimizerConfig;
 import io.phonepe.hystrixoptimizer.config.OptimizerTimeConfig;
+import io.phonepe.hystrixoptimizer.config.actions.impl.UpdateHystrixConfig;
+import io.phonepe.hystrixoptimizer.email.EmailClient;
+import io.phonepe.hystrixoptimizer.models.ActionType;
+import io.phonepe.hystrixoptimizer.utils.ActionTypeVisitor;
 import io.phonepe.hystrixoptimizer.models.OptimalThreadPoolAttributes;
 import io.phonepe.hystrixoptimizer.models.OptimalThreadPoolAttributes.OptimalThreadPoolAttributesBuilder;
 import io.phonepe.hystrixoptimizer.models.OptimalTimeoutAttributes;
@@ -20,13 +28,16 @@ import io.phonepe.hystrixoptimizer.metrics.AggregationAlgo;
 import io.phonepe.hystrixoptimizer.metrics.LatencyMetric;
 import io.phonepe.hystrixoptimizer.models.OptimizerAggregatedMetric;
 import io.phonepe.hystrixoptimizer.models.OptimizerMetrics;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+
+import io.phonepe.hystrixoptimizer.utils.DiffHelper;
+import io.phonepe.hystrixoptimizer.utils.EmailUtil;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,9 +56,15 @@ public class HystrixConfigUpdater implements Runnable {
     private OptimizerConfig optimizerConfig;
     private OptimizerMetricsCache optimizerMetricsCache;
     private Map<String, HystrixCommandConfig> initialHystrixCommandConfigMap;
+    private Actions allowedActions;
+    private EmailClient emailClient;
+    private DiffHelper<HystrixConfig> diffHelper;
 
-    public HystrixConfigUpdater(final HystrixConfig hystrixConfig, final HystrixConfig initialHystrixConfig,
-            final OptimizerConfig optimizerConfig, final OptimizerMetricsCache optimizerMetricsCache) {
+    public HystrixConfigUpdater(final HystrixConfig hystrixConfig,
+                                final HystrixConfig initialHystrixConfig,
+                                final OptimizerConfig optimizerConfig,
+                                final OptimizerMetricsCache optimizerMetricsCache,
+                                final Actions allowedActions) {
         this.hystrixConfig = hystrixConfig;
         this.initialHystrixConfig = initialHystrixConfig;
         this.optimizerConfig = optimizerConfig;
@@ -56,6 +73,14 @@ public class HystrixConfigUpdater implements Runnable {
         this.initialHystrixConfig.getCommands()
                 .forEach(hystrixCommandConfig -> initialHystrixCommandConfigMap
                         .putIfAbsent(hystrixCommandConfig.getName(), hystrixCommandConfig));
+        this.diffHelper = new DiffHelper<>(new ObjectMapper());
+
+        if (allowedActions.getActionConfigs().stream().anyMatch(actionConfig ->
+                actionConfig.getActionType() == ActionType.SEND_EMAIL_ALERT)) {
+            EmailConfig emailConfig = EmailUtil.getEmailConfig(allowedActions);
+            Preconditions.checkNotNull(emailConfig, "Email Config cannot be null");
+            this.emailClient = new EmailClient(emailConfig);
+        }
     }
 
     public static final String GLOBAL_THREAD_POOL_PREFIX = "global_";
@@ -204,7 +229,7 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateHystrixConfig(Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
-            Map<String, OptimizerMetrics> apiLevelLatencyMetrics) {
+                                     Map<String, OptimizerMetrics> apiLevelLatencyMetrics) {
         AtomicBoolean configUpdated = new AtomicBoolean();
 
         updateHystrixConfigForThreadPoolGroups(apiLevelThreadPoolMetrics, configUpdated);
@@ -215,18 +240,15 @@ public class HystrixConfigUpdater implements Runnable {
                 apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
 
         if (configUpdated.get()) {
-            hystrixConfig.setCommands(hystrixCommandConfigs);
-            HystrixConfigurationFactory.init(hystrixConfig);
-            log.debug("Updated Hystrix config with command cache : {}, pool cache: {}",
-                    HystrixConfigurationFactory.getCommandCache(), HystrixConfigurationFactory.getPoolCache());
+            takeAction(hystrixCommandConfigs);
         }
     }
 
     /**
      * Updates thread pool config of commands which are not explicitly specified in commands
-     *
+     * <p>
      * (to which default config is applied at first)
-     *
+     * <p>
      * This will be executed only once at the start, thereafter all commands configs will be added to the list
      */
     private List<HystrixCommandConfig> updateHystrixConfigForCommandsWithDefaultConfig(
@@ -276,7 +298,7 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateHystrixConfigForCommands(Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
-            Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
+                                                Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
         hystrixConfig.getCommands().forEach(hystrixCommandConfig -> {
             HystrixCommandConfig initialHystrixCommandConfig = initialHystrixCommandConfigMap
                     .get(hystrixCommandConfig.getName());
@@ -290,7 +312,7 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateHystrixConfigForThreadPoolGroups(Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
-            AtomicBoolean configUpdated) {
+                                                        AtomicBoolean configUpdated) {
         // Update hystrix config for thread pool groups
         hystrixConfig.getPools().forEach((poolName, currentThreadPoolConfig) -> {
             OptimizerMetrics optimizerThreadPoolMetrics = apiLevelThreadPoolMetrics
@@ -304,8 +326,8 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateApiSettings(HystrixCommandConfig hystrixCommandConfig, int initialConcurrency,
-            Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
-            Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
+                                   Map<String, OptimizerMetrics> apiLevelThreadPoolMetrics,
+                                   Map<String, OptimizerMetrics> apiLevelLatencyMetrics, AtomicBoolean configUpdated) {
 
         String commandName = hystrixCommandConfig.getName();
         OptimizerMetrics optimizerLatencyMetrics = apiLevelLatencyMetrics.get(commandName);
@@ -321,8 +343,8 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateConcurrencySettingForCommand(CommandThreadPoolConfig threadPoolConfig,
-            int initialConcurrency, OptimizerMetrics optimizerThreadPoolMetrics, String poolName,
-            AtomicBoolean configUpdated) {
+                                                    int initialConcurrency, OptimizerMetrics optimizerThreadPoolMetrics, String poolName,
+                                                    AtomicBoolean configUpdated) {
 
         OptimalThreadPoolAttributes optimalThreadPoolAttributes = calculateOptimalThreadPoolSize(
                 threadPoolConfig.getConcurrency(), initialConcurrency, poolName,
@@ -339,8 +361,8 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateConcurrencySettingForPool(ThreadPoolConfig currentThreadPoolConfig,
-            ThreadPoolConfig initialThreadPoolConfig,
-            OptimizerMetrics optimizerThreadPoolMetrics, String poolName, AtomicBoolean configUpdated) {
+                                                 ThreadPoolConfig initialThreadPoolConfig,
+                                                 OptimizerMetrics optimizerThreadPoolMetrics, String poolName, AtomicBoolean configUpdated) {
 
         OptimalThreadPoolAttributes optimalThreadPoolAttributes = calculateOptimalThreadPoolSize(
                 currentThreadPoolConfig.getConcurrency(), initialThreadPoolConfig.getConcurrency(), poolName,
@@ -358,7 +380,7 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private void updateTimeoutSettingForCommand(CommandThreadPoolConfig threadPoolConfig,
-            OptimizerMetrics optimizerLatencyMetrics, String commandName, AtomicBoolean configUpdated) {
+                                                OptimizerMetrics optimizerLatencyMetrics, String commandName, AtomicBoolean configUpdated) {
 
         OptimalTimeoutAttributes optimalTimeoutAttributes = calculateOptimalTimeout(threadPoolConfig.getTimeout(),
                 optimizerLatencyMetrics);
@@ -374,8 +396,8 @@ public class HystrixConfigUpdater implements Runnable {
     }
 
     private OptimalThreadPoolAttributes calculateOptimalThreadPoolSize(int currentConcurrency, int initialConcurrency,
-            String poolName,
-            OptimizerMetrics optimizerThreadPoolMetrics) {
+                                                                       String poolName,
+                                                                       OptimizerMetrics optimizerThreadPoolMetrics) {
         OptimalThreadPoolAttributesBuilder initialConcurrencyAttrBuilder = OptimalThreadPoolAttributes.builder()
                 .optimalConcurrency(currentConcurrency);
 
@@ -417,7 +439,7 @@ public class HystrixConfigUpdater implements Runnable {
 
 
     private OptimalTimeoutAttributes calculateOptimalTimeout(int currentTimeout,
-            OptimizerMetrics optimizerLatencyMetrics) {
+                                                             OptimizerMetrics optimizerLatencyMetrics) {
         OptimalTimeoutAttributesBuilder initialTimeoutAttributesBuilder = OptimalTimeoutAttributes
                 .builder()
                 .optimalTimeout(currentTimeout);
@@ -452,7 +474,33 @@ public class HystrixConfigUpdater implements Runnable {
                     .timeoutBuffer(timeoutBuffer)
                     .build();
         }
-
     }
 
+    private void takeAction(final List<HystrixCommandConfig> hystrixCommandConfigs) {
+        allowedActions.getActionConfigs().forEach(
+                actionConfig -> actionConfig.accept(new ActionTypeVisitor<Void>() {
+
+                    @Override
+                    public Void visitUpdateHystrixConfig(UpdateHystrixConfig updateHystrixConfig) {
+                        hystrixConfig.setCommands(hystrixCommandConfigs);
+                        HystrixConfigurationFactory.init(hystrixConfig);
+
+                        log.debug("Updated Hystrix config with command cache : {}, pool cache: {}",
+                                HystrixConfigurationFactory.getCommandCache(), HystrixConfigurationFactory.getPoolCache());
+                        return null;
+                    }
+
+                    @Override
+                    public Void visitSendEmailAlert(EmailConfig emailConfig) {
+                        final String jsonDiff = diffHelper.getObjectDiff(initialHystrixConfig, hystrixConfig);
+                        if (!Strings.isNullOrEmpty(jsonDiff)) {
+                            log.info("Sending Email Alert for Config Update");
+                            emailClient.sendEmail(EmailUtil.emailAddresses(emailConfig.getReceivers()),
+                                    "Hystrix Config Updated",
+                                    jsonDiff);
+                        }
+                        return null;
+                    }
+                }));
+    }
 }
