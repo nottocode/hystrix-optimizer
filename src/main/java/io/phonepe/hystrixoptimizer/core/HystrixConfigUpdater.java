@@ -323,6 +323,10 @@ public class HystrixConfigUpdater implements Runnable {
             ThreadPoolConfig initialThreadPoolConfig = initialHystrixConfig.getPools().get(poolName);
             Preconditions.checkArgument(initialThreadPoolConfig != null,
                     "Initial thread pool config for pool name : " + poolName + " is null");
+
+            log.debug("PoolName: {}, Current ThreadPool: {}", poolName, currentThreadPoolConfig);
+            log.debug("PoolName: {}, Initial ThreadPool: {}", poolName, initialThreadPoolConfig);
+
             updateConcurrencySettingForPool(currentThreadPoolConfig, initialThreadPoolConfig,
                     optimizerThreadPoolMetrics, poolName, configUpdated);
         });
