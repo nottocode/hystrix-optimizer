@@ -233,11 +233,14 @@ public class HystrixConfigUpdater implements Runnable {
         AtomicBoolean configUpdated = new AtomicBoolean();
 
         updateHystrixConfigForThreadPoolGroups(apiLevelThreadPoolMetrics, configUpdated);
+        log.debug("Updated Config for thread pool groups.");
 
         updateHystrixConfigForCommands(apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
+        log.debug("Updated Config for commands.");
 
         List<HystrixCommandConfig> hystrixCommandConfigs = updateHystrixConfigForCommandsWithDefaultConfig(
                 apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
+        log.debug("Updated Config for default cases.");
 
         if (configUpdated.get()) {
             takeAction(hystrixCommandConfigs);
