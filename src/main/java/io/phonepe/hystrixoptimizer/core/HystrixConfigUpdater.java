@@ -324,6 +324,7 @@ public class HystrixConfigUpdater implements Runnable {
             Preconditions.checkArgument(initialThreadPoolConfig != null,
                     "Initial thread pool config for pool name : " + poolName + " is null");
 
+            log.debug("ApiLevelThreadPoolMetrics: {}", apiLevelThreadPoolMetrics);
             log.debug("PoolName: {}, Current ThreadPool: {}", poolName, currentThreadPoolConfig);
             log.debug("PoolName: {}, Initial ThreadPool: {}", poolName, initialThreadPoolConfig);
 
