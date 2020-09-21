@@ -74,11 +74,15 @@ public class HystrixConfigUpdater implements Runnable {
                 .forEach(hystrixCommandConfig -> initialHystrixCommandConfigMap
                         .putIfAbsent(hystrixCommandConfig.getName(), hystrixCommandConfig));
         this.diffHelper = new DiffHelper<>(new ObjectMapper());
+        this.allowedActions = allowedActions;
 
+        log.debug("Initialized Allowed Actions: {}", allowedActions);
         if (allowedActions.getActionConfigs().stream().anyMatch(actionConfig ->
                 actionConfig.getActionType() == ActionType.SEND_EMAIL_ALERT)) {
             EmailConfig emailConfig = EmailUtil.getEmailConfig(allowedActions);
             Preconditions.checkNotNull(emailConfig, "Email Config cannot be null");
+            log.debug("Email Config: {}", emailConfig);
+            log.debug("Setting up email client.");
             this.emailClient = new EmailClient(emailConfig);
         }
     }
@@ -242,8 +246,10 @@ public class HystrixConfigUpdater implements Runnable {
                 apiLevelThreadPoolMetrics, apiLevelLatencyMetrics, configUpdated);
         log.debug("Updated Config for default cases.");
 
+        hystrixConfig.setCommands(hystrixCommandConfigs);
+
         if (configUpdated.get()) {
-            takeAction(hystrixCommandConfigs);
+            takeAction();
         }
     }
 
@@ -325,6 +331,7 @@ public class HystrixConfigUpdater implements Runnable {
                     "Initial thread pool config for pool name : " + poolName + " is null");
 
             log.debug("ApiLevelThreadPoolMetrics: {}", apiLevelThreadPoolMetrics);
+            log.debug("OptimizerThreadPoolMetrics: {}", optimizerThreadPoolMetrics);
             log.debug("PoolName: {}, Current ThreadPool: {}", poolName, currentThreadPoolConfig);
             log.debug("PoolName: {}, Initial ThreadPool: {}", poolName, initialThreadPoolConfig);
 
@@ -411,6 +418,7 @@ public class HystrixConfigUpdater implements Runnable {
 
         OptimizerConcurrencyConfig concurrencyConfig = optimizerConfig.getConcurrencyConfig();
         if (concurrencyConfig == null || !concurrencyConfig.isEnabled()
+                || optimizerThreadPoolMetrics == null || optimizerThreadPoolMetrics.getMetrics() == null
                 || !optimizerThreadPoolMetrics.getMetrics().containsKey(ROLLING_MAX_ACTIVE_THREADS.getMetricName())) {
             return initialConcurrencyAttrBuilder.build();
         }
@@ -484,13 +492,13 @@ public class HystrixConfigUpdater implements Runnable {
         }
     }
 
-    private void takeAction(final List<HystrixCommandConfig> hystrixCommandConfigs) {
+    private void takeAction() {
+        log.debug("Allowed Actions: ({})", allowedActions);
         allowedActions.getActionConfigs().forEach(
                 actionConfig -> actionConfig.accept(new ActionTypeVisitor<Void>() {
 
                     @Override
                     public Void visitUpdateHystrixConfig(UpdateHystrixConfig updateHystrixConfig) {
-                        hystrixConfig.setCommands(hystrixCommandConfigs);
                         HystrixConfigurationFactory.init(hystrixConfig);
 
                         log.debug("Updated Hystrix config with command cache : {}, pool cache: {}",
@@ -501,6 +509,7 @@ public class HystrixConfigUpdater implements Runnable {
                     @Override
                     public Void visitSendEmailAlert(EmailConfig emailConfig) {
                         final String jsonDiff = diffHelper.getObjectDiff(initialHystrixConfig, hystrixConfig);
+                        log.debug("JsonDiff: {}", jsonDiff);
                         if (!Strings.isNullOrEmpty(jsonDiff)) {
                             log.info("Sending Email Alert for Config Update");
                             emailClient.sendEmail(EmailUtil.emailAddresses(emailConfig.getReceivers()),

@@ -6,15 +6,15 @@ import io.phonepe.hystrixoptimizer.utils.ActionTypeVisitor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 import lombok.NonNull;
+import lombok.ToString;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import java.util.List;
 
 @Data
-@NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
 public class EmailConfig extends ActionConfig {
 
     @NonNull
@@ -28,6 +28,10 @@ public class EmailConfig extends ActionConfig {
 
     @NotEmpty
     private List<String> receivers;
+
+    public EmailConfig() {
+        super(ActionType.SEND_EMAIL_ALERT);
+    }
 
     @Builder
     public EmailConfig(final String host,

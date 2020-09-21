@@ -50,7 +50,7 @@ public class EmailClient {
             message.setContent(multipart);
             Transport.send(message);
         } catch (Exception e) {
-            log.error("Error while sending email alert.");
+            log.error("Error while sending email alert.", e);
         }
     }
 }

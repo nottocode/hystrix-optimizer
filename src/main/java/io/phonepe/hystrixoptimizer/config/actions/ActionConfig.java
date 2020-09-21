@@ -8,6 +8,7 @@ import io.phonepe.hystrixoptimizer.models.ActionType;
 import io.phonepe.hystrixoptimizer.utils.ActionTypeVisitor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Data
 @NoArgsConstructor
@@ -16,6 +17,7 @@ import lombok.NoArgsConstructor;
         @JsonSubTypes.Type(value = UpdateHystrixConfig.class, name = ActionType.UPDATE_HYSTRIX_CONFIG_VALUE),
         @JsonSubTypes.Type(value = EmailConfig.class, name = ActionType.SEND_EMAIL_ALERT_VALUE)
 })
+@ToString
 public abstract class ActionConfig {
 
     private ActionType actionType;

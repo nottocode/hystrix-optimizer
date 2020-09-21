@@ -6,12 +6,14 @@ import io.phonepe.hystrixoptimizer.utils.ActionTypeVisitor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@Builder
 public class UpdateHystrixConfig extends ActionConfig {
 
-    @Builder
     public UpdateHystrixConfig() {
         super(ActionType.UPDATE_HYSTRIX_CONFIG);
     }

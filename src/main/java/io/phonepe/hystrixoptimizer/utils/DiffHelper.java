@@ -39,11 +39,11 @@ public class DiffHelper<T> {
 
             MapDifference<String, Object> difference = Maps.difference(leftFlatMap, rightFlatMap);
 
-            diffString.add("\n\nEntries only on the left\n--------------------------\n");
+            //diffString.add("\n\nEntries only on the left\n--------------------------\n");
             difference.entriesOnlyOnLeft()
                     .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
-            diffString.add("\n\nEntries only on the right\n--------------------------\n");
+            //diffString.add("\n\nEntries only on the right\n--------------------------\n");
             difference.entriesOnlyOnRight()
                     .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
