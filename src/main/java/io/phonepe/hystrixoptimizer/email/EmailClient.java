@@ -37,7 +37,7 @@ public class EmailClient {
         this.mailSession = Session.getDefaultInstance(mailProps);
     }
 
-    public void sendEmail(String emailIds, String subject, String messageBody) {
+    public void sendEmail(final String emailIds, final String subject, final String messageBody) {
         try {
             MimeMessage message = new MimeMessage(mailSession);
             message.setFrom(new InternetAddress(mailConfig.getFrom()));

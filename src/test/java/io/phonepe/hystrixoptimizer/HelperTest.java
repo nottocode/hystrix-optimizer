@@ -8,8 +8,10 @@ import com.hystrix.configurator.config.HystrixConfig;
 import com.hystrix.configurator.config.ThreadPoolConfig;
 import io.phonepe.hystrixoptimizer.config.actions.ActionConfig;
 import io.phonepe.hystrixoptimizer.config.actions.impl.EmailConfig;
+import io.phonepe.hystrixoptimizer.models.ActionType;
 import io.phonepe.hystrixoptimizer.utils.DiffHelper;
 import io.phonepe.hystrixoptimizer.utils.EmailUtil;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -17,7 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class DiffHelperTest {
+public class HelperTest {
 
     @Test
     public void testEmailConfig() {
@@ -51,7 +53,7 @@ public class DiffHelperTest {
                 .build();
 
         DiffHelper<HystrixConfig> diffHelper = new DiffHelper<>(mapper);
-        System.out.println(diffHelper.getObjectDiff(base, current));
+        Assert.assertNotNull(diffHelper.getObjectDiff(base, current));
     }
 
     @Test
@@ -67,12 +69,12 @@ public class DiffHelperTest {
                 "                    ]" +
                 "            }";
         EmailConfig emailConfig = (EmailConfig) new ObjectMapper().readValue(a, ActionConfig.class);
-        System.out.println(emailConfig);
+        Assert.assertEquals(ActionType.SEND_EMAIL_ALERT, emailConfig.getActionType());
     }
 
     @Test
     public void testEmailIds() {
         List<String> emailIds = Arrays.asList("a@gmail.com", "b.@gmail.com");
-        System.out.println(EmailUtil.emailAddresses(emailIds));
+        Assert.assertEquals("a@gmail.com,b.@gmail.com", EmailUtil.emailAddresses(emailIds));
     }
 }

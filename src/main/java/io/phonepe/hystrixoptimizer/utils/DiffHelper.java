@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 @Singleton
 public class DiffHelper<T> {
 
-    private ObjectMapper mapper;
+    private final ObjectMapper mapper;
 
     public DiffHelper(final ObjectMapper objectMapper) {
         this.mapper = objectMapper;
@@ -40,12 +40,12 @@ public class DiffHelper<T> {
             MapDifference<String, Object> difference = Maps.difference(leftFlatMap, rightFlatMap);
 
             //diffString.add("\n\nEntries only on the left\n--------------------------\n");
-            difference.entriesOnlyOnLeft()
-                    .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
+            //difference.entriesOnlyOnLeft()
+            //        .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
             //diffString.add("\n\nEntries only on the right\n--------------------------\n");
-            difference.entriesOnlyOnRight()
-                    .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
+            //difference.entriesOnlyOnRight()
+            //        .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
             diffString.add("\n\nEntries differing\n--------------------------\n");
             difference.entriesDiffering()
