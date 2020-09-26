@@ -507,7 +507,7 @@ public class HystrixConfigUpdater implements Runnable {
                         if (!Strings.isNullOrEmpty(jsonDiff)) {
                             log.info("Sending Email Alert for Config Update");
                             emailClient.sendEmail(EmailUtil.emailAddresses(emailConfig.getReceivers()),
-                                    "Hystrix Config Updated",
+                                    "Suggestions For Hystrix Config",
                                     jsonDiff);
                         }
                         return null;

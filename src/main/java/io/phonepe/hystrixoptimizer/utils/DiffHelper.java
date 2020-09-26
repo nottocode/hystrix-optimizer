@@ -47,11 +47,11 @@ public class DiffHelper<T> {
             //difference.entriesOnlyOnRight()
             //        .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
-            diffString.add("\n\nEntries differing\n--------------------------\n");
+            //diffString.add("\n\nEntries differing\n--------------------------\n");
             difference.entriesDiffering()
-                    .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
+                    .forEach((key, value) -> diffString.add(EmailUtil.tableRowForEmail(key, value)));
 
-            return String.join("", diffString);
+            return EmailUtil.emailBody(String.join("", diffString));
         } catch (Exception e) {
             log.error("Exception while calculating difference. Only logging it.");
         }

@@ -53,6 +53,7 @@ public class HelperTest {
                 .build();
 
         DiffHelper<HystrixConfig> diffHelper = new DiffHelper<>(mapper);
+        //System.out.println(diffHelper.getObjectDiff(base, current));
         Assert.assertNotNull(diffHelper.getObjectDiff(base, current));
     }
 
