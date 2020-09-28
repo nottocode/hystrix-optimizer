@@ -26,10 +26,8 @@ public class DiffHelper<T> {
         this.mapper = objectMapper;
     }
 
-    public String getObjectDiff(T baseObject, T currentObject) {
+    public MapDifference<String, Object> getObjectDiff(T baseObject, T currentObject) {
         try {
-            final List<String> diffString = new ArrayList<>();
-
             TypeReference<HashMap<String, Object>> type = new TypeReference<HashMap<String, Object>>() {
             };
             Map<String, Object> leftMap = mapper.readValue(mapper.writeValueAsString(baseObject), type);
@@ -37,21 +35,15 @@ public class DiffHelper<T> {
             Map<String, Object> leftFlatMap = flatten(leftMap);
             Map<String, Object> rightFlatMap = flatten(rightMap);
 
-            MapDifference<String, Object> difference = Maps.difference(leftFlatMap, rightFlatMap);
-
-            //diffString.add("\n\nEntries only on the left\n--------------------------\n");
+            return Maps.difference(leftFlatMap, rightFlatMap);
             //difference.entriesOnlyOnLeft()
             //        .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
-            //diffString.add("\n\nEntries only on the right\n--------------------------\n");
             //difference.entriesOnlyOnRight()
             //        .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
 
-            //diffString.add("\n\nEntries differing\n--------------------------\n");
-            difference.entriesDiffering()
-                    .forEach((key, value) -> diffString.add(EmailUtil.tableRowForEmail(key, value)));
-
-            return EmailUtil.emailBody(String.join("", diffString));
+            //  difference.entriesDiffering()
+            //        .forEach((key, value) -> diffString.add(key + ": " + value + '\n'));
         } catch (Exception e) {
             log.error("Exception while calculating difference. Only logging it.");
         }

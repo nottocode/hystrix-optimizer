@@ -6,6 +6,7 @@ import io.phonepe.hystrixoptimizer.config.actions.Actions;
 import io.phonepe.hystrixoptimizer.config.actions.impl.EmailConfig;
 import io.phonepe.hystrixoptimizer.models.ActionType;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class EmailUtil {
@@ -20,6 +21,13 @@ public class EmailUtil {
                 .filter(actionConfig -> actionConfig.getActionType() == ActionType.SEND_EMAIL_ALERT)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public static String tableRowsForEmail(final MapDifference<String, Object> difference) {
+        final List<String> diffString = new ArrayList<>();
+        difference.entriesDiffering()
+                .forEach((key, value) -> diffString.add(tableRowForEmail(key, value)));
+        return String.join("", diffString);
     }
 
     public static String tableRowForEmail(final String key,

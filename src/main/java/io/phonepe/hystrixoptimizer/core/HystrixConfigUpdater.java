@@ -4,7 +4,7 @@ import static io.phonepe.hystrixoptimizer.metrics.ThreadPoolMetric.ROLLING_MAX_A
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
+import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
 import com.hystrix.configurator.config.CommandThreadPoolConfig;
 import com.hystrix.configurator.config.HystrixCommandConfig;
@@ -31,6 +31,7 @@ import io.phonepe.hystrixoptimizer.models.OptimizerMetrics;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -502,13 +503,14 @@ public class HystrixConfigUpdater implements Runnable {
 
                     @Override
                     public Void visitSendEmailAlert(EmailConfig emailConfig) {
-                        final String jsonDiff = diffHelper.getObjectDiff(initialHystrixConfig, hystrixConfig);
-                        log.debug("JsonDiff: {}", jsonDiff);
-                        if (!Strings.isNullOrEmpty(jsonDiff)) {
+                        final MapDifference<String, Object> difference = diffHelper.getObjectDiff(initialHystrixConfig, hystrixConfig);
+                        if (!Objects.isNull(difference) && !Objects.isNull(difference.entriesDiffering())) {
                             log.info("Sending Email Alert for Config Update");
+                            final String allDataRows = EmailUtil.tableRowsForEmail(difference);
+                            log.debug("Data Rows: {}", allDataRows);
                             emailClient.sendEmail(EmailUtil.emailAddresses(emailConfig.getReceivers()),
                                     "Suggestions For Hystrix Config",
-                                    jsonDiff);
+                                    EmailUtil.emailBody(allDataRows));
                         }
                         return null;
                     }
