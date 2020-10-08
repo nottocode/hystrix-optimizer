@@ -20,7 +20,9 @@ import io.dropwizard.Configuration;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import io.phonepe.hystrixoptimizer.config.actions.Actions;
 import io.phonepe.hystrixoptimizer.config.OptimizerConfig;
+import io.phonepe.hystrixoptimizer.config.actions.impl.UpdateHystrixConfig;
 import io.phonepe.hystrixoptimizer.core.HystrixConfigUpdater;
 import io.phonepe.hystrixoptimizer.core.OptimizerMetricsCache;
 import io.phonepe.hystrixoptimizer.core.OptimizerMetricsCollector;
@@ -52,6 +54,11 @@ public class HystrixOptimizerBundleTest {
         OptimizerConfig optimizerConfig = OptimizerUtils.getDefaultOptimizerConfig();
         metrics = new MetricRegistry();
 
+        Actions actions = Actions.builder()
+                .actionConfigs(Collections.singletonList(UpdateHystrixConfig.builder()
+                        .build()))
+                .build();
+
         LifecycleEnvironment lifecycleEnvironment = new LifecycleEnvironment();
         Environment environment = mock(Environment.class);
         when(environment.getObjectMapper()).thenReturn(new ObjectMapper());
@@ -68,6 +75,12 @@ public class HystrixOptimizerBundleTest {
             @Override
             public OptimizerConfig getOptimizerConfig(Configuration configuration) {
                 return optimizerConfig;
+            }
+
+
+            @Override
+            public Actions getActions(Configuration configuration) {
+                return actions;
             }
 
             @Override
@@ -92,7 +105,7 @@ public class HystrixOptimizerBundleTest {
         hystrixConfigUpdater = new HystrixConfigUpdater(hystrixConfig,
                 environment.getObjectMapper().readValue(environment.getObjectMapper().writeValueAsString(hystrixConfig),
                         HystrixConfig.class),
-                optimizerConfig, optimizerMetricsCache);
+                optimizerConfig, optimizerMetricsCache, actions);
 
         rollingMaxActiveGauge("myService.myCommand", 10);
         rollingMaxActiveGauge(GLOBAL_THREAD_POOL_PREFIX + "threadPool1", 2);
