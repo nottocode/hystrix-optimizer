@@ -10,6 +10,7 @@ import io.dropwizard.Configuration;
 import io.dropwizard.ConfiguredBundle;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import io.phonepe.hystrixoptimizer.config.actions.Actions;
 import io.phonepe.hystrixoptimizer.config.OptimizerConfig;
 import io.phonepe.hystrixoptimizer.config.OptimizerConfigUpdaterConfig;
 import io.phonepe.hystrixoptimizer.config.OptimizerMetricsCollectorConfig;
@@ -27,6 +28,8 @@ public abstract class HystrixOptimizerBundle<T extends Configuration> implements
     public abstract HystrixConfig getHystrixConfig(T configuration);
 
     public abstract OptimizerConfig getOptimizerConfig(T configuration);
+
+    public abstract Actions getActions(T configuration);
 
     @Override
     public void initialize(Bootstrap<?> bootstrap) {
@@ -50,8 +53,10 @@ public abstract class HystrixOptimizerBundle<T extends Configuration> implements
 
         HystrixConfigurationFactory.init(hystrixConfig);
 
+        Actions allowedActions = getActions(configuration);
+
         setupOptimizer(getOptimizerConfig(configuration), hystrixConfig, metrics, metricsBuilderExecutorService,
-                configUpdaterExecutorService, environment.getObjectMapper());
+                configUpdaterExecutorService, environment.getObjectMapper(), allowedActions);
     }
 
     /**
@@ -62,10 +67,14 @@ public abstract class HystrixOptimizerBundle<T extends Configuration> implements
      * @param metricsBuilderExecutorService Scheduled executor service to run metrics builder
      * @param configUpdaterExecutorService Scheduled executor service to run config updater
      */
-    private void setupOptimizer(OptimizerConfig optimizerConfig, HystrixConfig hystrixConfig,
-            MetricRegistry metrics, ScheduledExecutorService metricsBuilderExecutorService,
-            ScheduledExecutorService configUpdaterExecutorService,
-            ObjectMapper objectMapper) throws IOException {
+    private void setupOptimizer(final OptimizerConfig optimizerConfig,
+                                final HystrixConfig hystrixConfig,
+                                final MetricRegistry metrics,
+                                final ScheduledExecutorService metricsBuilderExecutorService,
+                                final ScheduledExecutorService configUpdaterExecutorService,
+                                final ObjectMapper objectMapper,
+                                final Actions allowedActions) throws IOException {
+
         if (optimizerConfig != null && optimizerConfig.isEnabled()) {
             log.info("Optimizer config enabled");
             OptimizerMetricsCollectorConfig optimizerMetricsCollectorConfig = optimizerConfig
@@ -87,7 +96,7 @@ public abstract class HystrixOptimizerBundle<T extends Configuration> implements
 
             HystrixConfigUpdater hystrixConfigUpdater = new HystrixConfigUpdater(hystrixConfig,
                     objectMapper.readValue(objectMapper.writeValueAsString(hystrixConfig), HystrixConfig.class),
-                    optimizerConfig, optimizerMetricsCache);
+                    optimizerConfig, optimizerMetricsCache, allowedActions);
 
             OptimizerConfigUpdaterConfig configUpdaterConfig = optimizerConfig
                     .getConfigUpdaterConfig();
